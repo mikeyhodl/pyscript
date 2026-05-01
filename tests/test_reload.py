@@ -143,7 +143,7 @@ log.info(f"BOTCH shouldn't load {__name__}")
         patch("custom_components.pyscript.watchdog_start", return_value=None),
         patch("custom_components.pyscript.os.path.getmtime", return_value=1000),
         patch("custom_components.pyscript.global_ctx.os.path.getmtime", return_value=1000),
-        patch("custom_components.pyscript.os.path.isfile") as mock_isfile,
+        patch("custom_components.pyscript.global_ctx.os_path_isfile") as mock_isfile,
     ):
         mock_isfile.side_effect = isfile_side_effect
         mock_glob.side_effect = glob_side_effect
