@@ -610,7 +610,7 @@ class Kernel:
                     await self.housekeep_q.put(["shutdown"])
         except asyncio.CancelledError:
             raise
-        except (EOFError, ConnectionResetError):
+        except EOFError, ConnectionResetError:
             _LOGGER.debug("control_listen got eof")
             await self.housekeep_q.put(["unregister", "control", asyncio.current_task()])
             control_socket.close()
@@ -630,7 +630,7 @@ class Kernel:
                 # _LOGGER.debug("stdin_listen received %s", _)
         except asyncio.CancelledError:
             raise
-        except (EOFError, ConnectionResetError):
+        except EOFError, ConnectionResetError:
             _LOGGER.debug("stdin_listen got eof")
             await self.housekeep_q.put(["unregister", "stdin", asyncio.current_task()])
             stdin_socket.close()
@@ -651,7 +651,7 @@ class Kernel:
         except asyncio.CancelledError:
             shell_socket.close()
             raise
-        except (EOFError, ConnectionResetError):
+        except EOFError, ConnectionResetError:
             _LOGGER.debug("shell_listen got eof")
             await self.housekeep_q.put(["unregister", "shell", asyncio.current_task()])
             shell_socket.close()
@@ -672,7 +672,7 @@ class Kernel:
                 await heartbeat_socket.send(msg)
         except asyncio.CancelledError:
             raise
-        except (EOFError, ConnectionResetError):
+        except EOFError, ConnectionResetError:
             _LOGGER.debug("heartbeat_listen got eof")
             await self.housekeep_q.put(["unregister", "heartbeat", asyncio.current_task()])
             heartbeat_socket.close()
@@ -693,7 +693,7 @@ class Kernel:
                 # _LOGGER.debug("iopub received %s", _)
         except asyncio.CancelledError:
             raise
-        except (EOFError, ConnectionResetError):
+        except EOFError, ConnectionResetError:
             await self.housekeep_q.put(["unregister", "iopub", asyncio.current_task()])
             iopub_socket.close()
             self.iopub_socket.discard(iopub_socket)

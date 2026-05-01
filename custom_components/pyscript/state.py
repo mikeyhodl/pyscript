@@ -63,7 +63,7 @@ class StateVal(str):
         """Return the state converted to a datetime, matching the forgiving template behaviour."""
         try:
             return dt_util.parse_datetime(self, raise_on_error=True)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             if default is _SENTINEL:
                 raise_no_default("as_datetime", self)
         return default
