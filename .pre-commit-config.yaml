@@ -4,7 +4,9 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix, --show-fixes]
+        files: ^(custom_components|tests)/.+\.py$
       - id: ruff-format
+        files: ^(custom_components|tests)/.+\.py$
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
