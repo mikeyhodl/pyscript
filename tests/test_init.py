@@ -29,7 +29,7 @@ async def setup_script(hass, notify_q, now, source, script_name="/hello.py"):
     Function.hass = None
 
     with (
-        patch("custom_components.pyscript.os.path.isdir", return_value=True),
+        patch("custom_components.pyscript.os_path_isdir", return_value=True),
         patch("custom_components.pyscript.glob.iglob", return_value=scripts),
         patch("custom_components.pyscript.global_ctx.open", mock_open(read_data=source)),
         patch("custom_components.pyscript.trigger.dt_now", return_value=now),
@@ -74,8 +74,8 @@ async def wait_until_done(notify_q):
 async def test_setup_makedirs_on_no_dir(hass, caplog):
     """Test setup calls os.makedirs when no dir found."""
     with (
-        patch("custom_components.pyscript.os.path.isdir", return_value=False),
-        patch("custom_components.pyscript.os.makedirs"),
+        patch("custom_components.pyscript.os_path_isdir", return_value=False),
+        patch("custom_components.pyscript.os_makedirs"),
         patch("custom_components.pyscript.watchdog_start", return_value=None) as makedirs_call,
         patch("homeassistant.config.load_yaml_config_file", return_value={}),
     ):
@@ -463,7 +463,7 @@ def func5(var_name=None, value=None):
         ]
 
         with (
-            patch("custom_components.pyscript.os.path.isdir", return_value=True),
+            patch("custom_components.pyscript.os_path_isdir", return_value=True),
             patch("custom_components.pyscript.glob.iglob", return_value=scripts),
             patch("custom_components.pyscript.global_ctx.open", mock_open(read_data=next_source)),
             patch("custom_components.pyscript.open", mock_open(read_data=next_source)),
