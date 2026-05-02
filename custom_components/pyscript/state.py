@@ -9,16 +9,55 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Context, HomeAssistant, State as CoreState
 from homeassistant.helpers.restore_state import DATA_RESTORE_STATE
 from homeassistant.helpers.service import async_get_all_descriptions
-from homeassistant.helpers.template.extensions.math import _SENTINEL as MATH_SENTINEL, MathExtension
-from homeassistant.helpers.template.extensions.type_cast import (
-    _SENTINEL as TYPECAST_SENTINEL,
-    TypeCastExtension,
-)
-from homeassistant.helpers.template.helpers import (
-    _SENTINEL,
-    forgiving_boolean,
-    raise_no_default,
-)
+
+try:
+    # HA >= 2026.5
+    from homeassistant.helpers.template.extensions.math import _SENTINEL as MATH_SENTINEL, MathExtension
+    from homeassistant.helpers.template.extensions.type_cast import (
+        _SENTINEL as TYPECAST_SENTINEL,
+        TypeCastExtension,
+    )
+    from homeassistant.helpers.template.helpers import (
+        _SENTINEL,
+        forgiving_boolean,
+        raise_no_default,
+    )
+except ImportError:
+    # HA < 2026.5
+    from homeassistant.helpers.template import (  # type: ignore[no-redef]
+        _SENTINEL,
+        forgiving_boolean,
+        forgiving_float as _forgiving_float,
+        forgiving_int as _forgiving_int,
+        forgiving_round as _forgiving_round,
+        raise_no_default,
+    )
+
+    TYPECAST_SENTINEL = _SENTINEL
+    MATH_SENTINEL = _SENTINEL
+
+    class TypeCastExtension:  # type: ignore[no-redef]
+        """Shim for older HA versions that export forgiving_* as module-level functions."""
+
+        @staticmethod
+        def forgiving_float(value, default=_SENTINEL):
+            """Shim for forgiving_float."""
+            return _forgiving_float(value, default=default)
+
+        @staticmethod
+        def forgiving_int(value, default=_SENTINEL, base=10):
+            """Shim for forgiving_int."""
+            return _forgiving_int(value, default=default, base=base)
+
+    class MathExtension:  # type: ignore[no-redef]
+        """Shim for older HA versions that export forgiving_round as a module-level function."""
+
+        @staticmethod
+        def forgiving_round(value, precision=0, method="common", default=_SENTINEL):
+            """Shim for forgiving_round."""
+            return _forgiving_round(value, precision=precision, method=method, default=default)
+
+
 from homeassistant.util import dt as dt_util
 
 from .const import LOGGER_PATH
@@ -63,7 +102,7 @@ class StateVal(str):
         """Return the state converted to a datetime, matching the forgiving template behaviour."""
         try:
             return dt_util.parse_datetime(self, raise_on_error=True)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             if default is _SENTINEL:
                 raise_no_default("as_datetime", self)
         return default
