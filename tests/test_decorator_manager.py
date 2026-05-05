@@ -271,14 +271,17 @@ class DummyEvalFuncVar:
 class DummyCallAstCtx:
     """Minimal action AstEval stub for manager call tests."""
 
-    def __init__(self, result: object) -> None:
+    def __init__(self, result: object = None, exc: Exception | None = None) -> None:
         """Initialize the dummy action context."""
         self.result = result
+        self.exc = exc
         self.calls: list[tuple[object, object, dict]] = []
 
     async def call_func(self, func: object, func_name: object, **kwargs: object) -> object:
-        """Record the function call and return the configured result."""
+        """Record the function call and return or raise the configured result."""
         self.calls.append((func, func_name, kwargs))
+        if self.exc is not None:
+            raise self.exc
         return self.result
 
 
@@ -576,6 +579,24 @@ async def test_function_decorator_manager_success_calls_result_handlers(hass):
         "func_args": {"arg1": 1},
     }
     store_hass_context.assert_called_once_with(hass_context)
+
+
+@pytest.mark.asyncio
+async def test_function_decorator_manager_logs_call_exception(hass):
+    """Failed decorated function calls should be routed through the manager."""
+    DecoratorManager.hass = hass
+    ast_ctx = DummyAstCtx()
+    manager = FunctionDecoratorManager(ast_ctx, DummyEvalFuncVar())
+    call_ast_ctx = DummyCallAstCtx(exc=RuntimeError("decorated call failed"))
+
+    await call_function_manager(
+        manager,
+        make_dispatch_data({"arg1": 1}, call_ast_ctx=call_ast_ctx, hass_context=Context(id="call-parent")),
+    )
+
+    assert call_ast_ctx.calls == [(manager.eval_func, None, {"arg1": 1})]
+    assert len(ast_ctx.logged_exceptions) == 1
+    assert str(ast_ctx.logged_exceptions[0]) == "decorated call failed"
 
 
 def test_decorator_registry_register_requires_name():
