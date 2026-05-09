@@ -438,6 +438,7 @@ class task:
 
     @staticmethod
     def wait_until(
+        *,
         state_trigger: str | list[str] | None = None,
         time_trigger: str | list[str] | None = None,
         event_trigger: str | list[str] | None = None,
