@@ -3,16 +3,17 @@
 from ast import literal_eval
 import asyncio
 from datetime import datetime as dt
-from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+from unittest.mock import mock_open, patch
 
 import pytest
 
 from custom_components.pyscript import trigger
 from custom_components.pyscript.const import DOMAIN
-from custom_components.pyscript.decorators.webhook import WebhookTriggerDecorator
 from custom_components.pyscript.function import Function
+from homeassistant.components import webhook
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EVENT_STATE_CHANGED
 from homeassistant.setup import async_setup_component
+from homeassistant.util.aiohttp import MockRequest
 
 
 async def setup_script(hass, notify_q, now, source):
@@ -244,11 +245,14 @@ def webhook_test(payload, request):
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
     await hass.async_block_till_done()
 
-    request = MagicMock()
-    request.headers = {"Content-Type": "application/json", "X-My-Sig": "abc123"}
-    request.method = "POST"
-    request.json = AsyncMock(return_value={"hello": "world"})
+    request = MockRequest(
+        content=b'{"hello": "world"}',
+        mock_source="test",
+        method="POST",
+        headers={"Content-Type": "application/json", "X-My-Sig": "abc123"},
+        remote="127.0.0.1",
+    )
 
-    await WebhookTriggerDecorator._handler(hass, "test_req_hook", request)
+    await webhook.async_handle_webhook(hass, "test_req_hook", request)
 
     assert literal_eval(await wait_until_done(notify_q)) == ["abc123", "POST", {"hello": "world"}]
