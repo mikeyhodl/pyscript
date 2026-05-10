@@ -882,6 +882,7 @@ variables:
 - ``trigger_type`` is set to "webhook"
 - ``webhook_id`` is set to the webhook_id that was called.
 - ``payload`` is the data/json that was sent in the request returned as a dictionary.
+- ``request`` is the underlying ``aiohttp.web.Request``. Use it to inspect headers (e.g. for HMAC signature validation), the HTTP method, query string, or to re-read the raw body via ``await request.read()`` (the body is cached after pyscript parses it into ``payload``).
 
 When the ``@webhook_trigger`` occurs, those same variables are passed as keyword arguments to the function in case it needs them. Additional keyword parameters can be specified by setting the optional ``kwargs`` argument to a ``dict`` with the keywords and values.
 
@@ -894,6 +895,25 @@ An simple example looks like
       log.info(f"It ran! {payload}, {extra}")
 
 which if called using the curl command ``curl -X POST -d 'key1=xyz&key2=abc' hass_url/api/webhook/myid`` outputs ``It ran! {'key1': 'xyz', 'key2': 'abc'}, 10``
+
+To validate an HMAC signature on incoming requests, declare ``request`` in the function and read the raw body:
+
+.. code:: python
+
+  import hmac
+  import hashlib
+
+  SECRET = b"shared-secret"
+
+  @webhook_trigger("github")
+  def gh(payload, request):
+      sig = request.headers.get("X-Hub-Signature-256", "")
+      body = await request.read()
+      expected = "sha256=" + hmac.new(SECRET, body, hashlib.sha256).hexdigest()
+      if not hmac.compare_digest(sig, expected):
+          log.warning("bad signature, ignoring")
+          return
+      log.info(f"verified webhook: {payload}")
 
 NOTE: A webhook_id can only be used by either a built-in Home Assistant automation or pyscript, but not both. Trying to use the same webhook_id in both will result in an error.
 
