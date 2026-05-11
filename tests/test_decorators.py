@@ -10,8 +10,10 @@ import pytest
 from custom_components.pyscript import trigger
 from custom_components.pyscript.const import DOMAIN
 from custom_components.pyscript.function import Function
+from homeassistant.components import webhook
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EVENT_STATE_CHANGED
 from homeassistant.setup import async_setup_component
+from homeassistant.util.aiohttp import MockRequest
 
 
 async def setup_script(hass, notify_q, now, source):
@@ -224,3 +226,33 @@ def func6(value):
         hass.states.async_set("pyscript.var1", 6 + 2 * i)
         seq_num += 1
         assert literal_eval(await wait_until_done(notify_q)) == [seq_num, 6 + 2 * i]
+
+
+@pytest.mark.asyncio
+async def test_webhook_request_kwarg(hass):
+    """The aiohttp request is passed to the user function as the `request` kwarg."""
+    notify_q = asyncio.Queue(0)
+    await setup_script(
+        hass,
+        notify_q,
+        [dt(2020, 7, 1, 11, 59, 59, 999999)],
+        """
+@webhook_trigger("test_req_hook")
+def webhook_test(payload, request):
+    pyscript.done = [request.headers["X-My-Sig"], request.method, payload]
+""",
+    )
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+
+    request = MockRequest(
+        content=b'{"hello": "world"}',
+        mock_source="test",
+        method="POST",
+        headers={"Content-Type": "application/json", "X-My-Sig": "abc123"},
+        remote="127.0.0.1",
+    )
+
+    await webhook.async_handle_webhook(hass, "test_req_hook", request)
+
+    assert literal_eval(await wait_until_done(notify_q)) == ["abc123", "POST", {"hello": "world"}]
