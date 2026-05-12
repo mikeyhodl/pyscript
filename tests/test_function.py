@@ -790,6 +790,50 @@ def func2(var_name=None, value=None):
 
 
 @pytest.mark.asyncio
+async def test_time_active_hold_off_send_last(hass):
+    """Test hold_off_send_last runs with the latest suppressed trigger data."""
+    notify_q = asyncio.Queue(0)
+
+    await setup_script(
+        hass,
+        notify_q,
+        None,
+        [dt(2020, 7, 1, 10, 59, 59, 999998)],
+        """
+seq_num = 0
+
+@state_trigger("True", watch=["pyscript.var1"])
+@time_active(hold_off=0.05, hold_off_send_last=True)
+def func1(var_name=None, value=None):
+    global seq_num
+
+    seq_num += 1
+    pyscript.done = ["hold_off_send_last", seq_num, var_name, value]
+""",
+    )
+
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+
+    hass.states.async_set("pyscript.var1", 2)
+    assert literal_eval(await wait_until_done(notify_q)) == [
+        "hold_off_send_last",
+        1,
+        "pyscript.var1",
+        "2",
+    ]
+
+    hass.states.async_set("pyscript.var1", 3)
+    hass.states.async_set("pyscript.var1", 4)
+    assert literal_eval(await wait_until_done(notify_q)) == [
+        "hold_off_send_last",
+        2,
+        "pyscript.var1",
+        "4",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_state_trigger_time(hass, caplog):
     """Test state trigger."""
     notify_q = asyncio.Queue(0)

@@ -940,7 +940,7 @@ first time (so there is no prior value).
 
 .. code:: python
 
-    @time_active(time_spec, ..., hold_off=None)
+    @time_active(time_spec, ..., hold_off=None, hold_off_send_last=False)
 
 ``@time_active`` takes zero or more strings that specify time-based ranges. Only a single
 ``@time_active`` decorator can be used per function. When any trigger occurs (whether time, state
@@ -950,6 +950,10 @@ range specified, the trigger is ignored and the trigger function is not called. 
 the last successful one. Think of this as making the trigger inactive for that number of seconds
 immediately following each successful trigger. This can be used for rate-limiting trigger events or
 debouncing a noisy sensor.
+If ``hold_off_send_last`` is true, triggers that arrive during the ``hold_off`` window are still
+suppressed, but if at least one trigger was suppressed, the function runs after the window ends
+using the data from the most recent suppressed trigger. Earlier suppressed triggers are discarded.
+If no triggers arrive during the window, no extra run is scheduled.
 
 Each string specification ``time_spec`` can take two forms:
 

@@ -97,12 +97,15 @@ def event_trigger(
     ...
 
 
-def time_active(*time_spec: str, hold_off: int | float | None = None) -> Callable[..., Any]:
+def time_active(
+    *time_spec: str, hold_off: int | float | None = None, hold_off_send_last: bool = False
+) -> Callable[..., Any]:
     """Restrict trigger execution to specific time windows.
 
     Args:
         time_spec: ``range()`` or ``cron()`` expressions (optionally prefixed with ``not``) checked on each trigger.
         hold_off: Seconds to suppress further triggers after a successful run.
+        hold_off_send_last: Run once with the latest suppressed trigger data when ``hold_off`` ends.
 
     """
     ...
