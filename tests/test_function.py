@@ -440,6 +440,13 @@ def func10d(var_name=None, value=None, trigger_type=None, context=None, old_valu
     log.info(f"func10d var = {var_name}, value = {value}, kwargs = {kwargs}")
     pyscript.done = [seq_num, var_name, kwargs]
 
+@state_trigger("pyscript.f11var1 == 'playing'", state_hold=1e-6)
+def func11(var_name=None, value=None, old_value=None):
+    global seq_num
+
+    seq_num += 1
+    pyscript.done = [seq_num, var_name, old_value, value, value.position, pyscript.f11var1.position]
+
 """,
     )
     # initialize the trigger and active variables
@@ -671,6 +678,22 @@ def func10d(var_name=None, value=None, trigger_type=None, context=None, old_valu
     hass.states.async_set("pyscript.f8bvar1", 31)
     hass.states.async_set("pyscript.f8bvar1", 30)
     hass.states.async_set("pyscript.f8bvar1", 31)
+
+    #
+    # check that state_hold isn't cancelled by unrelated attribute-only updates
+    #
+    seq_num += 1
+    hass.states.async_set("pyscript.f11var1", "stop")
+    hass.states.async_set("pyscript.f11var1", "playing", {"position": 1})
+    hass.states.async_set("pyscript.f11var1", "playing", {"position": 2})
+    assert literal_eval(await wait_until_done(notify_q)) == [
+        seq_num,
+        "pyscript.f11var1",
+        "stop",
+        "playing",
+        1,
+        2,
+    ]
 
     #
     # check that state_var.old is None first time
