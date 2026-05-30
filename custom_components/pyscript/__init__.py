@@ -354,7 +354,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         DOMAIN, SERVICE_GENERATE_STUBS, generate_stubs_service, supports_response=SupportsResponse.ONLY
     )
 
-    async def jupyter_kernel_start(call: ServiceCall) -> dict | None:
+    async def jupyter_kernel_start(call: ServiceCall) -> dict:
         """Handle Jupyter kernel start call."""
         _LOGGER.debug("service call to jupyter_kernel_start: %s", call.data)
 
@@ -380,7 +380,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             kernel.set_session_cleanup_callback(state_var_remove)
 
         # newer kernels use the service response
-        return {'ports': kernel.get_ports()}
+        return {"ports": kernel.get_ports()}
 
     hass.services.async_register(
         DOMAIN,
