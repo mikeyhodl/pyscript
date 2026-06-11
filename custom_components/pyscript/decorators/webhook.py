@@ -79,7 +79,8 @@ class WebhookTriggerDecorator(TriggerDecorator, ExpressionDecorator, AutoKwargsD
     @staticmethod
     def _add_trigger(trigger: WebhookTriggerDecorator) -> None:
         webhook_id = trigger.webhook_id
-        if webhook_id not in WebhookTriggerDecorator.webhook_id2triggers:
+        triggers = WebhookTriggerDecorator.webhook_id2triggers.get(webhook_id)
+        if triggers is None:
             webhook.async_register(
                 trigger.dm.hass,
                 "pyscript",  # DOMAIN
@@ -89,9 +90,17 @@ class WebhookTriggerDecorator(TriggerDecorator, ExpressionDecorator, AutoKwargsD
                 local_only=trigger.local_only,
                 allowed_methods=trigger.methods,
             )
-            WebhookTriggerDecorator.webhook_id2triggers[webhook_id] = set()
+            WebhookTriggerDecorator.webhook_id2triggers[webhook_id] = {trigger}
+            return
 
-        WebhookTriggerDecorator.webhook_id2triggers[webhook_id].add(trigger)
+        existing = next(iter(triggers))
+        if existing.local_only != trigger.local_only or existing.methods != trigger.methods:
+            raise ValueError(
+                f"'{trigger.dm.func_name}' @webhook_trigger for '{webhook_id}' conflicts with existing "
+                f"'{existing.dm.ast_ctx.get_global_ctx_name()}.{existing.dm.func_name}' "
+                f"(local_only={existing.local_only}, methods={existing.methods})"
+            )
+        triggers.add(trigger)
 
     @staticmethod
     def _remove_trigger(trigger: WebhookTriggerDecorator) -> None:
