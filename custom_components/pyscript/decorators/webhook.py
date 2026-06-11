@@ -31,7 +31,12 @@ class WebhookTriggerDecorator(TriggerDecorator, ExpressionDecorator, AutoKwargsD
     kwargs_schema = vol.Schema(
         {
             vol.Optional("local_only", default=True): cv.boolean,
-            vol.Optional("methods"): vol.All(list[str], [vol.In(SUPPORTED_METHODS)]),
+            vol.Optional("methods", default={hdrs.METH_POST, hdrs.METH_PUT}): vol.All(
+                vol.Coerce(list),
+                [vol.In(SUPPORTED_METHODS)],
+                vol.Length(min=1, msg="needs at least one HTTP method"),
+                vol.Coerce(set),
+            ),
         }
     )
 
