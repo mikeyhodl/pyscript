@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from enum import StrEnum
 import logging
@@ -179,8 +180,7 @@ class DecoratorManager(ABC):
             try:
                 await decorator.start()
                 started.append(decorator)
-            except Exception as err:
-                self.logger.exception("%s start failed: %s", self, err)
+            except Exception:
                 for started_dec in started:
                     await self._stop_decorator(started_dec)
                 self.startup_time = None
@@ -208,6 +208,19 @@ class DecoratorManager(ABC):
     async def handle_exception(self, exc: Exception) -> None:
         """Handle a decorator exception."""
         self.ast_ctx.log_exception(exc)
+
+    async def safe_await(self, coro: Awaitable[Any]) -> None:
+        """
+        Await a coroutine, routing (but not propagating) bugs through ``handle_exception``.
+
+        Intended for extension points where a defective subclass shouldn't break
+        sibling work: the exception surfaces in the same place as user-code errors,
+        and the caller carries on.
+        """
+        try:
+            await coro
+        except Exception as err:
+            await self.handle_exception(err)
 
     @abstractmethod
     async def dispatch(self, data: DispatchData) -> None:

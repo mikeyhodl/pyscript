@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
 import logging
-from typing import ClassVar
+from typing import Any, ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -309,6 +310,10 @@ class DummyAsyncManager:
         """Record manager stop."""
         self.stop_calls += 1
 
+    async def safe_await(self, coro: Awaitable[Any]) -> None:
+        """Await ``coro`` without error handling (sufficient for these tests)."""
+        await coro
+
 
 class FakeFunctionDecoratorManager:
     """Patchable manager stub for GlobalContext.create_decorator_manager tests."""
@@ -347,6 +352,10 @@ class FakeFunctionDecoratorManager:
         """Record manager stop."""
         self.stop_calls += 1
 
+    # Reuse the real implementations — they only need self.ast_ctx.
+    safe_await = DecoratorManager.safe_await
+    handle_exception = DecoratorManager.handle_exception
+
 
 def make_dispatch_data(
     func_args: dict[str, object],
@@ -379,6 +388,40 @@ async def test_decorator_manager_no_decorators_and_accessors():
 
     with pytest.raises(RuntimeError, match="Starting not valid"):
         await dm.start()
+
+
+@pytest.mark.asyncio
+async def test_decorator_manager_safe_await_returns_silently_on_success():
+    """safe_await should await without surfacing anything when the coroutine succeeds."""
+    ast_ctx = DummyAstCtx()
+    dm = DummyManager(ast_ctx)
+    awaited = []
+
+    async def work():
+        awaited.append("ran")
+        return 42  # value is intentionally discarded by safe_await
+
+    result = await dm.safe_await(work())
+
+    assert result is None
+    assert awaited == ["ran"]
+    assert not ast_ctx.logged_exceptions
+
+
+@pytest.mark.asyncio
+async def test_decorator_manager_safe_await_routes_exception_through_handle_exception():
+    """safe_await should catch the coroutine's exception and forward it to handle_exception."""
+    ast_ctx = DummyAstCtx()
+    dm = DummyManager(ast_ctx)
+    boom = RuntimeError("boom")
+
+    async def work():
+        raise boom
+
+    # Must not raise.
+    await dm.safe_await(work())
+
+    assert ast_ctx.logged_exceptions == [boom]
 
 
 @pytest.mark.asyncio

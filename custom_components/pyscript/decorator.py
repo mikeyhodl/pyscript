@@ -250,7 +250,7 @@ class FunctionDecoratorManager(DecoratorManager):
 
         def on_func_var_deleted():
             if self.status is DecoratorManagerStatus.RUNNING:
-                self.hass.async_create_task(self.stop())
+                self.hass.async_create_task(self.safe_await(self.stop()))
 
         weakref.finalize(eval_func_var, on_func_var_deleted)
 
