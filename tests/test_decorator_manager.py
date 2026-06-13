@@ -23,6 +23,7 @@ from custom_components.pyscript.decorator_abc import (
     DecoratorManager,
     DecoratorManagerStatus,
     DispatchData,
+    TriggerHandlerDecorator,
 )
 import custom_components.pyscript.decorators.base as decorators_base_module
 from custom_components.pyscript.decorators.base import AutoKwargsDecorator, ExpressionDecorator
@@ -147,6 +148,39 @@ class RecordingResultHandler(CallResultHandlerDecorator):
         self.results.append(result)
 
 
+class FullRecordingResultHandler(CallResultHandlerDecorator):
+    """Result handler that records all three notification methods separately."""
+
+    name = "full_record_result"
+    results: list[object]
+    exceptions: list[Exception]
+    canceled_calls: int
+
+    async def handle_call_result(self, data: DispatchData, result: object) -> None:
+        """Record successful result."""
+        self.results.append(result)
+
+    async def handle_call_exception(self, data: DispatchData, exc: Exception) -> None:
+        """Record exception (override the default that forwards as None)."""
+        self.exceptions.append(exc)
+
+    async def handle_call_canceled(self, data: DispatchData) -> None:
+        """Record cancellation (override the default that forwards as None)."""
+        self.canceled_calls += 1
+
+
+class CancelDispatchHandler(TriggerHandlerDecorator):
+    """Trigger handler that cancels the dispatch."""
+
+    name = "cancel_dispatch"
+    seen: list[dict]
+
+    async def handle_dispatch(self, data: DispatchData) -> bool:
+        """Cancel the dispatch."""
+        self.seen.append(data.func_args.copy())
+        return False
+
+
 class AutoKwargsTestDecorator(AutoKwargsDecorator):
     """Decorator used to test AutoKwargsDecorator behavior."""
 
@@ -206,6 +240,22 @@ def make_recording_result_handler() -> RecordingResultHandler:
     """Create a recording result handler."""
     handler = RecordingResultHandler([], {})
     handler.results = []
+    return handler
+
+
+def make_full_recording_result_handler() -> FullRecordingResultHandler:
+    """Create a full recording result handler."""
+    handler = FullRecordingResultHandler([], {})
+    handler.results = []
+    handler.exceptions = []
+    handler.canceled_calls = 0
+    return handler
+
+
+def make_cancel_dispatch_handler() -> CancelDispatchHandler:
+    """Create a dispatch-canceling trigger handler."""
+    handler = CancelDispatchHandler([], {})
+    handler.seen = []
     return handler
 
 
@@ -640,6 +690,116 @@ async def test_function_decorator_manager_logs_call_exception(hass):
     assert call_ast_ctx.calls == [(manager.eval_func, None, {"arg1": 1})]
     assert len(ast_ctx.logged_exceptions) == 1
     assert str(ast_ctx.logged_exceptions[0]) == "decorated call failed"
+
+
+@pytest.mark.asyncio
+async def test_function_decorator_manager_exception_calls_handle_call_exception(hass):
+    """On exception path, result handlers should receive handle_call_exception (not handle_call_result)."""
+    DecoratorManager.hass = hass
+    ast_ctx = DummyAstCtx()
+    manager = FunctionDecoratorManager(ast_ctx, DummyEvalFuncVar())
+    result_handler = make_full_recording_result_handler()
+    manager.add(result_handler)
+    exc = RuntimeError("boom")
+    call_ast_ctx = DummyCallAstCtx(exc=exc)
+
+    await call_function_manager(
+        manager,
+        make_dispatch_data({"arg1": 1}, call_ast_ctx=call_ast_ctx, hass_context=Context(id="call-parent")),
+    )
+
+    assert result_handler.exceptions == [exc]
+    assert not result_handler.results
+    assert result_handler.canceled_calls == 0
+    # exception is still logged via the manager
+    assert ast_ctx.logged_exceptions == [exc]
+
+
+@pytest.mark.asyncio
+async def test_function_decorator_manager_cancel_calls_handle_call_canceled(hass):
+    """On CallHandler veto, result handlers should receive handle_call_canceled (not handle_call_result)."""
+    DecoratorManager.hass = hass
+    manager = FunctionDecoratorManager(DummyAstCtx(), DummyEvalFuncVar())
+    call_handler = make_cancel_call_handler()
+    result_handler = make_full_recording_result_handler()
+    call_ast_ctx = DummyCallAstCtx(result="unused")
+    manager.add(call_handler)
+    manager.add(result_handler)
+
+    await call_function_manager(
+        manager,
+        make_dispatch_data({"arg1": 1}, call_ast_ctx=call_ast_ctx, hass_context=Context(id="call-parent")),
+    )
+
+    assert call_handler.seen == [{"arg1": 1}]
+    assert result_handler.canceled_calls == 1
+    assert not result_handler.results
+    assert not result_handler.exceptions
+    assert not call_ast_ctx.calls
+
+
+@pytest.mark.asyncio
+async def test_function_decorator_manager_dispatch_veto_calls_handle_call_canceled(hass):
+    """On TriggerHandler veto, result handlers should receive handle_call_canceled."""
+    DecoratorManager.hass = hass
+    manager = FunctionDecoratorManager(DummyAstCtx(), DummyEvalFuncVar())
+    trigger_handler = make_cancel_dispatch_handler()
+    result_handler = make_full_recording_result_handler()
+    manager.add(trigger_handler)
+    manager.add(result_handler)
+
+    await manager.dispatch(make_dispatch_data({"arg1": 1}))
+
+    assert trigger_handler.seen == [{"arg1": 1}]
+    assert result_handler.canceled_calls == 1
+    assert not result_handler.results
+    assert not result_handler.exceptions
+
+
+@pytest.mark.asyncio
+async def test_function_decorator_manager_result_handler_failure_does_not_block_siblings(hass):
+    """A buggy result handler should be routed via handle_exception and not stop siblings."""
+    DecoratorManager.hass = hass
+    ast_ctx = DummyAstCtx()
+    manager = FunctionDecoratorManager(ast_ctx, DummyEvalFuncVar())
+
+    handler_bug = RuntimeError("broken handler boom")
+
+    class _BrokenHandler(CallResultHandlerDecorator):
+        name = "broken_handler"
+
+        async def handle_call_result(self, data: DispatchData, result: object) -> None:
+            raise handler_bug
+
+    broken = _BrokenHandler([], {})
+    sibling = make_full_recording_result_handler()
+    call_ast_ctx = DummyCallAstCtx(result="ok")
+    manager.add(broken)
+    manager.add(sibling)
+
+    await call_function_manager(
+        manager,
+        make_dispatch_data({"arg1": 1}, call_ast_ctx=call_ast_ctx, hass_context=Context(id="cid")),
+    )
+
+    assert sibling.results == ["ok"]
+    assert ast_ctx.logged_exceptions == [handler_bug]
+
+
+@pytest.mark.asyncio
+async def test_call_result_handler_default_handle_call_exception_forwards_none():
+    """Default handle_call_exception should forward the call to handle_call_result with None."""
+    handler = make_recording_result_handler()
+    await handler.handle_call_exception(make_dispatch_data({}), RuntimeError("boom"))
+    assert handler.results == [None]
+
+
+@pytest.mark.asyncio
+async def test_call_result_handler_default_handle_call_canceled_forwards_none():
+    """Default handle_call_canceled should forward the call to handle_call_result with None."""
+    handler = make_recording_result_handler()
+    await handler.handle_call_canceled(make_dispatch_data({}))
+    assert handler.results == [None]
 
 
 def test_decorator_registry_register_requires_name():

@@ -294,3 +294,11 @@ class CallResultHandlerDecorator(Decorator, ABC):
     @abstractmethod
     async def handle_call_result(self, data: DispatchData, result: Any) -> None:
         """Handle an action call result."""
+
+    async def handle_call_exception(self, data: DispatchData, exc: Exception) -> None:
+        """Handle an exception raised by the action call. Default: forward as None result."""
+        await self.handle_call_result(data, None)
+
+    async def handle_call_canceled(self, data: DispatchData) -> None:
+        """Handle a canceled action call (skipped by a handler or trigger). Default: forward as None result."""
+        await self.handle_call_result(data, None)
