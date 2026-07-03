@@ -2035,21 +2035,20 @@ You can use ``hass`` to compute sunrise and sunset times using the same method H
 .. code:: python
 
    import homeassistant.helpers.sun as sun
+   import homeassistant.util.dt as dt_util
    import datetime
 
-   location = sun.get_astral_location(hass)
-   sunrise = location[0].sunrise(datetime.datetime.today()).replace(tzinfo=None)
-   sunset = location[0].sunset(datetime.datetime.today()).replace(tzinfo=None)
+   date = datetime.date.today()
+   sunrise = dt_util.as_local(sun.get_astral_event_date(hass, "sunrise", date)).replace(tzinfo=None)
+   sunset = dt_util.as_local(sun.get_astral_event_date(hass, "sunset", date)).replace(tzinfo=None)
    print(f"today sunrise = {sunrise}, sunset = {sunset}")
 
 (Note that the ``sun.sun`` attributes already provide times for the next sunrise and sunset, so
-this example is a bit contrived.  Also note this only applies to HA 2021.5 and later; prior
-to that, ``sun.get_astral_location()`` doesn't return the elevation, so replace ``location[0]``
-with ``location`` in the two expressions if you have an older version of HA.)
+this example is a bit contrived.  The ``sun.get_astral_event_date()`` helper returns the time in
+UTC, so ``dt_util.as_local()`` converts it to local time.)
 
 Here's another method that uses the installed version of ``astral`` directly, rather than the HASS
-helper function. HA 2021.5 upgraded to ``astral 2.2``, and here's one way of getting sunrise
-using this version (prior to this HA used a very old version of ``astral``).
+helper function (note this does not account for your configured elevation):
 
 .. code:: python
 
