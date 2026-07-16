@@ -834,6 +834,53 @@ def func1(var_name=None, value=None):
 
 
 @pytest.mark.asyncio
+async def test_time_active_hold_off_send_last_outside_range(hass):
+    """Test the deferred hold_off_send_last run fires even outside the time_active range."""
+    notify_q = asyncio.Queue(0)
+
+    await setup_script(
+        hass,
+        notify_q,
+        None,
+        # consumed in order: startup_time, first range check; 12:00 for anything after
+        [dt(2020, 7, 1, 10, 30, 0, 0), dt(2020, 7, 1, 10, 30, 0, 0), dt(2020, 7, 1, 12, 0, 0, 0)],
+        """
+seq_num = 0
+
+@state_trigger("True", watch=["pyscript.var1"])
+@time_active("range(10:00, 11:00)", hold_off=0.1, hold_off_send_last=True)
+def func1(var_name=None, value=None):
+    global seq_num
+
+    seq_num += 1
+    pyscript.done = ["outside_range", seq_num, var_name, value]
+""",
+    )
+
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+
+    # first trigger checks the range against dt_now() == 10:30 and fires
+    hass.states.async_set("pyscript.var1", 2)
+    assert literal_eval(await wait_until_done(notify_q)) == [
+        "outside_range",
+        1,
+        "pyscript.var1",
+        "2",
+    ]
+
+    # suppressed during hold_off; dt_now() now reads 12:00, outside the range,
+    # but the deferred run is not range-checked and still fires with the latest data
+    hass.states.async_set("pyscript.var1", 3)
+    assert literal_eval(await wait_until_done(notify_q)) == [
+        "outside_range",
+        2,
+        "pyscript.var1",
+        "3",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_state_trigger_time(hass, caplog):
     """Test state trigger."""
     notify_q = asyncio.Queue(0)

@@ -953,7 +953,12 @@ This can be used for rate-limiting trigger events or debouncing a noisy sensor.
 If ``hold_off_send_last`` is true, triggers that arrive during the ``hold_off`` window are still
 suppressed, but if at least one trigger was suppressed, the function runs after the window ends
 using the data from the most recent suppressed trigger. Earlier suppressed triggers are discarded.
-If no triggers arrive during the window, no extra run is scheduled.
+If no triggers arrive during the window, no extra run is scheduled. The deferred run bypasses the
+``time_spec`` ranges of its own decorator: it always happens, even if the window ends outside
+every range, and the data it delivers may come from a trigger that itself arrived outside the
+ranges. This way the function always receives the latest trigger data. To keep a time range in
+force for the deferred run too, either check the current time inside the function, or put the
+range in a separate ``@time_active`` decorator, whose checks apply to the deferred run as well.
 
 Each string specification ``time_spec`` can take two forms:
 
@@ -987,6 +992,12 @@ matches any of the positive arguments, and none of the negative arguments.
    def motion_controlled_light(**kwargs):
        log.info(f"got motion. turning on the lights")
        light.turn_on(entity_id="light.hallway")
+
+   @state_trigger("sensor.temperature")
+   @time_active(hold_off=60, hold_off_send_last=True)  # at most once a minute, latest value wins
+   @time_active("range(8:00, 22:00)")  # only during the day, including the deferred run
+   def show_temperature(value):
+       log.info(f"temperature is now {value}")
 
 Other Function Decorators
 -------------------------
