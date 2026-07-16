@@ -4,6 +4,7 @@ from ast import literal_eval
 import asyncio
 from collections.abc import Generator
 from datetime import datetime
+import glob
 import re
 from typing import Any
 from unittest.mock import patch
@@ -117,14 +118,9 @@ class PyscriptFixture:
         def isfile_side_effect(arg):
             return arg in files_map
 
-        def glob_side_effect(path, recursive=None, root_dir=None, dir_fd=None, include_hidden=False):
-            result = []
-            path_re = path.replace("*", "[^/]*").replace(".", "\\.")
-            path_re = path_re.replace("[^/]*[^/]*/", ".*")
-            for this_path in files_map:
-                if re.match(path_re, this_path):
-                    result.append(this_path)
-            return result
+        def glob_side_effect(path, recursive=False, root_dir=None, dir_fd=None, include_hidden=False):
+            path_re = re.compile(glob.translate(path, recursive=recursive, include_hidden=include_hidden))
+            return [this_path for this_path in files_map if path_re.match(this_path)]
 
         with (
             patch("custom_components.pyscript.os.path.isdir", return_value=True),
