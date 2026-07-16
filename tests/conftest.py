@@ -123,7 +123,6 @@ class PyscriptFixture:
             return [this_path for this_path in files_map if path_re.match(this_path)]
 
         with (
-            patch("custom_components.pyscript.os.path.isdir", return_value=True),
             patch("custom_components.pyscript.os_path_isdir", return_value=True),
             patch("custom_components.pyscript.glob.iglob") as mock_glob,
             patch("custom_components.pyscript.global_ctx.open", mock_open),
