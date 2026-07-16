@@ -803,7 +803,7 @@ async def test_time_active_hold_off_send_last(hass):
 seq_num = 0
 
 @state_trigger("True", watch=["pyscript.var1"])
-@time_active(hold_off=0.05, hold_off_send_last=True)
+@time_active(hold_off=0.1, hold_off_send_last=True)
 def func1(var_name=None, value=None):
     global seq_num
 
