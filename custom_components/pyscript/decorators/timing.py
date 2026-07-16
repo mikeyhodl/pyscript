@@ -49,10 +49,13 @@ class TimeActiveDecorator(TriggerHandlerDecorator, AutoKwargsDecorator):
         while self._pending_data is not None:
             delay = self.last_trig_time + self.hold_off - time.monotonic()
             if delay > 0.0:
+                # A trigger may pass and clear _pending_data while we sleep;
+                # re-check the loop condition after every await.
                 await asyncio.sleep(delay)
+                continue
 
             data = self._pending_data
-            _LOGGER.debug("%s hold_off_send_last dispatching after delay %s", self, delay)
+            _LOGGER.debug("%s hold_off_send_last dispatching %s", self, data)
             await self.dm.dispatch(data)
             if self._pending_data is data:
                 self._pending_data = None
