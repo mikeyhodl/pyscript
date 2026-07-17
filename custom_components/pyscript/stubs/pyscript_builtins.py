@@ -146,6 +146,46 @@ def webhook_trigger(
     ...
 
 
+def webhook_handler(
+    webhook_id: str,
+    str_expr: str | None = None,
+    local_only: bool = True,
+    methods: set[SUPPORTED_METHODS] | list[SUPPORTED_METHODS] = {"POST", "PUT"},
+    timeout: int | float = 10.0,
+    kwargs: dict | None = None,
+) -> Callable[..., Any]:
+    """Handle a webhook request and return the HTTP response from the function.
+
+    Like ``@webhook_trigger`` but the decorated function's return value becomes the HTTP
+    response. Only one handler can be registered per ``webhook_id``.
+
+    Args:
+        webhook_id: Webhook id to listen to; must not be registered by another handler or trigger.
+        str_expr: Optional expression evaluated against ``trigger_type``, ``webhook_id``, ``request``, and ``payload``.
+        local_only: If False, allow requests from anywhere on the internet.
+        methods: HTTP methods to allow.
+        timeout: Seconds to wait for the function before returning ``504 Gateway Timeout``.
+        kwargs: Extra keyword arguments merged into each invocation.
+
+    Trigger kwargs are identical to ``@webhook_trigger``.
+
+    Return value mapping (function -> HTTP response):
+        - ``None`` or no return -> ``200 OK``
+        - ``str`` -> ``200`` with text body
+        - ``bytes`` -> ``200`` with raw body
+        - ``dict`` / ``list`` -> ``200`` with JSON body
+        - ``(status, body)`` tuple -> ``status`` from tuple, ``body`` mapped recursively
+        - ``aiohttp.web.Response`` -> returned as-is
+        - any other type -> ``500`` with a warning (use a tuple or a Response instead)
+
+    A malformed request body yields ``400 Bad Request``, a falsy ``str_expr`` guard
+    yields ``403 Forbidden``, an uncaught exception in the function yields
+    ``500 Internal Server Error``, and a call canceled by another decorator's guard
+    (e.g. ``@task_unique`` or ``@state_active``) yields ``503 Service Unavailable``.
+    """
+    ...
+
+
 def pyscript_compile() -> Callable[..., Any]:
     """Compile the wrapped function into native (synchronous) Python.
 
