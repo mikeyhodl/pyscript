@@ -960,16 +960,25 @@ first time (so there is no prior value).
 
 .. code:: python
 
-    @time_active(time_spec, ..., hold_off=None)
+    @time_active(time_spec, ..., hold_off=None, hold_off_send_last=False)
 
-``@time_active`` takes zero or more strings that specify time-based ranges. Only a single
-``@time_active`` decorator can be used per function. When any trigger occurs (whether time, state
-or event), each time range specification is checked. If the current time doesn't fall within any
-range specified, the trigger is ignored and the trigger function is not called. The optional numeric
-``hold_off`` setting in seconds will ignore any triggers that are within that amount of time from
-the last successful one. Think of this as making the trigger inactive for that number of seconds
-immediately following each successful trigger. This can be used for rate-limiting trigger events or
-debouncing a noisy sensor.
+``@time_active`` takes zero or more strings that specify time-based ranges. Multiple
+``@time_active`` decorators can be used per function; a trigger must satisfy all of them. When any
+trigger occurs (whether time, state or event), each time range specification is checked. If the
+current time doesn't fall within any range specified, the trigger is ignored and the trigger
+function is not called. The optional numeric ``hold_off`` setting in seconds will ignore any
+triggers that are within that amount of time from the last successful one. Think of this as making
+the trigger inactive for that number of seconds immediately following each successful trigger.
+This can be used for rate-limiting trigger events or debouncing a noisy sensor.
+If ``hold_off_send_last`` is true, triggers that arrive during the ``hold_off`` window are still
+suppressed, but if at least one trigger was suppressed, the function runs after the window ends
+using the data from the most recent suppressed trigger. Earlier suppressed triggers are discarded.
+If no triggers arrive during the window, no extra run is scheduled. The deferred run bypasses the
+``time_spec`` ranges of its own decorator: it always happens, even if the window ends outside
+every range, and the data it delivers may come from a trigger that itself arrived outside the
+ranges. This way the function always receives the latest trigger data. To keep a time range in
+force for the deferred run too, either check the current time inside the function, or put the
+range in a separate ``@time_active`` decorator, whose checks apply to the deferred run as well.
 
 Each string specification ``time_spec`` can take two forms:
 
@@ -1003,6 +1012,12 @@ matches any of the positive arguments, and none of the negative arguments.
    def motion_controlled_light(**kwargs):
        log.info(f"got motion. turning on the lights")
        light.turn_on(entity_id="light.hallway")
+
+   @state_trigger("sensor.temperature")
+   @time_active(hold_off=60, hold_off_send_last=True)  # at most once a minute, latest value wins
+   @time_active("range(8:00, 22:00)")  # only during the day, including the deferred run
+   def show_temperature(value):
+       log.info(f"temperature is now {value}")
 
 Other Function Decorators
 -------------------------
